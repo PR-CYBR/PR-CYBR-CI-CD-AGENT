@@ -1,1 +1,18 @@
-# Docker Compose
+version: '3.8'
+
+services:
+  pr-cybr-ci-cd-agent:
+    image: prcybr/pr-cybr-ci-cd-agent:latest
+    container_name: pr-cybr-ci-cd-agent
+    env_file: .env # Load environment variables from .env file
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - pr-cybr-net
+    ports:
+      - "8080:80" # Adjust this port as necessary for your Agent
+
+networks:
+  pr-cybr-net:
+    driver: bridge
