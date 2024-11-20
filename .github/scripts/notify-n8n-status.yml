@@ -12,7 +12,7 @@ jobs:
         with:
           payload: |
             {
-              "channel": "#your-channel-name",
+              "channel": "${{ secrets.SLACK_CHANNEL_NAME }}",
               "text": "N8N setup and tests completed successfully.",
               "attachments": [
                 {
