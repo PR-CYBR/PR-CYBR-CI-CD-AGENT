@@ -58,11 +58,64 @@ if [ "$setup_choice" == "1" ]; then
     sed -i "s/N8N_BASIC_AUTH_USER=.*/N8N_BASIC_AUTH_USER=$N8N_BASIC_AUTH_USER/" .env
     sed -i "s/N8N_BASIC_AUTH_PASSWORD=.*/N8N_BASIC_AUTH_PASSWORD=$N8N_BASIC_AUTH_PASSWORD/" .env
 
-    # Pull the latest n8n container
-    docker compose pull
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo "Docker is not installed. Installing Docker..."
+    sudo apt-get update
+    sudo apt-get install -y \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        gnupg \
+        lsb-release
 
-    # Start Docker containers
-    docker compose up -d
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+      $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+    if [ $? -ne 0 ]; then
+        echo "Failed to install Docker. Exiting."
+        exit 1
+    fi
+    echo "Docker installed successfully."
+else
+    echo "Docker is already installed."
+fi
+
+# Check if Docker Compose is installed
+if ! docker compose version &> /dev/null; then
+    echo "Docker Compose is not installed. Installing Docker Compose..."
+    sudo apt-get install -y docker-compose-plugin
+    if [ $? -ne 0 ]; then
+        echo "Failed to install Docker Compose. Exiting."
+        exit 1
+    fi
+    echo "Docker Compose installed successfully."
+else
+    echo "Docker Compose is already installed."
+fi
+
+# Pull the latest n8n container
+echo "Pulling the latest n8n container..."
+docker compose pull
+if [ $? -ne 0 ]; then
+    echo "Failed to pull the n8n container. Exiting."
+    exit 1
+fi
+
+# Start Docker containers
+echo "Starting Docker containers..."
+docker compose up -d
+if [ $? -ne 0 ]; then
+    echo "Failed to start Docker containers. Exiting."
+    exit 1
+fi
+
+echo "n8n setup completed successfully."
 
 elif [ "$setup_choice" == "2" ]; then
     # npm setup

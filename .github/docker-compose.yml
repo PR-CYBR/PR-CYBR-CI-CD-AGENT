@@ -52,17 +52,17 @@ services:
     networks:
       - pr-cybr-net
 
-  pr-cybr-ci-cd-agent:
-    image: prcybr/pr-cybr-ci-cd-agent:latest
-    container_name: pr-cybr-ci-cd-agent
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    networks:
-      - pr-cybr-net
-    ports:
-      - "8080:80"
+#  pr-cybr-ci-cd-agent:
+#    image: prcybr/pr-cybr-ci-cd-agent:latest
+#    container_name: pr-cybr-ci-cd-agent
+#    env_file: .env
+#    volumes:
+#      - ./data:/app/data
+#      - ./logs:/app/logs
+#    networks:
+#      - pr-cybr-net
+#    ports:
+#      - "8080:80"
 
 volumes:
   postgres_data:
