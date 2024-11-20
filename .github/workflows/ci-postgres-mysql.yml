@@ -1,0 +1,46 @@
+name: CI Postgres MySQL
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-databases:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: n8n
+          POSTGRES_PASSWORD: n8n
+          POSTGRES_DB: n8n
+        options: >-
+          --health-cmd "pg_isready -U n8n"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      mysql:
+        image: mysql:latest
+        env:
+          MYSQL_ROOT_PASSWORD: n8n
+          MYSQL_DATABASE: n8n
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 3306:3306
+
+    steps:
+      - uses: actions/checkout@v4.1.1
+
+      - name: Test Postgres Connection
+        run: |
+          docker run --rm --network host postgres:latest psql -h localhost -U n8n -c '\l'
+
+      - name: Test MySQL Connection
+        run: |
+          docker run --rm --network host mysql:latest mysql -h localhost -u root -pn8n -e 'SHOW DATABASES;'

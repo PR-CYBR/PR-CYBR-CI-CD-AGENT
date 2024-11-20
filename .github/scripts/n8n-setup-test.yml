@@ -1,0 +1,38 @@
+name: N8N Setup Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+      - 'bugfix/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  trigger-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger CI Postgres MySQL
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: ci-postgres-mysql.yml
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger N8N Base Image Test
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: n8n-base-image.yml
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  handle-results:
+    runs-on: ubuntu-latest
+    needs: trigger-tests
+    steps:
+      - name: Check Test Results
+        run: |
+          # Logic to check results and update docker-compose.yml if needed
+          # Create a pull request if changes are made
+          echo "Check results and handle accordingly"

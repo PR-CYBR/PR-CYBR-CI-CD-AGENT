@@ -35,50 +35,8 @@ sudo apt-get install -y sqlite3 postgresql-client
 git clone https://github.com/PR-CYBR/n8n.git
 cd n8n
 
-# Create docker-compose.yml file
-cat <<EOL > docker-compose.yml
-version: '3.1'
-
-services:
-  n8n:
-    image: pr-cybr/n8n
-    restart: always
-    ports:
-      - 5678:5678
-    environment:
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=n8n
-      - DB_POSTGRESDB_USER=n8n
-      - DB_POSTGRESDB_PASSWORD=n8n
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=\${N8N_BASIC_AUTH_USER}
-      - N8N_BASIC_AUTH_PASSWORD=\${N8N_BASIC_AUTH_PASSWORD}
-      - N8N_TZ=\$(cat /etc/timezone)
-    volumes:
-      - ./n8n:/home/node/.n8n
-    depends_on:
-      - postgres
-
-  postgres:
-    image: postgres:13
-    restart: always
-    environment:
-      POSTGRES_USER: n8n
-      POSTGRES_PASSWORD: n8n
-      POSTGRES_DB: n8n
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  tunnel:
-    image: n8nio/localtunnel
-    command: --port 5678
-    restart: always
-
-volumes:
-  postgres_data:
-EOL
+# Download the latest docker-compose.yml file
+curl -o docker-compose.yml https://raw.githubusercontent.com/PR-CYBR/n8n/master/.github/docker-compose.yml
 
 # Prompt user for necessary details
 read -p "Enter your DOMAIN_NAME: " DOMAIN_NAME

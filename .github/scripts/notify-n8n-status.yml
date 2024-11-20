@@ -1,0 +1,26 @@
+name: Notify N8N Status
+
+on:
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack Notification
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload: |
+            {
+              "channel": "#your-channel-name",
+              "text": "N8N setup and tests completed successfully.",
+              "attachments": [
+                {
+                  "color": "#36a64f",
+                  "title": "N8N Setup Status",
+                  "text": "All tests passed and the setup is complete."
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
