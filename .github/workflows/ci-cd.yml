@@ -13,16 +13,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
 
-      - name: Install dependencies
+      - name: Create Docker volume
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          docker volume create n8n_data
 
-      - name: Run tests
-        run: |
-          python -m unittest discover tests
+          - name: Run n8n container
+          run: |
+            set -e  # Exit immediately if a command exits with a non-zero status
+            
+            # Run the n8n container
+            docker run -d --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n docker.n8n.io/n8nio/n8n
+            
+            # Wait for the container to be fully up and running
+            for i in {1..10}; do
+              if docker ps | grep -q n8n; then
+                echo "n8n container is running."
+                break
+              fi
+              echo "Waiting for n8n container to start..."
+              sleep 5
+            done
+  
+            # Check if the container is running
+            if ! docker ps | grep -q n8n; then
+              echo "n8n container failed to start."
+              exit 1
+            fi
