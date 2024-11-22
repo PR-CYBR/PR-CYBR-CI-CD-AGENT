@@ -1,6 +1,11 @@
-name: Docker Hub Update
+name: Build and Publish image to Docker Hub
 
 on:
+  push:
+    branches:
+      - main
+    paths: 
+      - 'config/Dockerfile'
   workflow_dispatch:
 
 jobs:
@@ -9,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -17,25 +22,9 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Push Docker images
+      - name: build image
         run: |
-          # Define the repositories and their Docker Hub counterparts
-          REPOS=(
-            "PR-CYBR-MGMT-AGENT"
-            "PR-CYBR-DATA-INTEGRATION-AGENT"
-            "PR-CYBR-DATABASE-AGENT"
-            "PR-CYBR-FRONTEND-AGENT"
-            "PR-CYBR-BACKEND-AGENT"
-            "PR-CYBR-PERFORMANCE-AGENT"
-            "PR-CYBR-SECURITY-AGENT"
-            "PR-CYBR-TESTING-AGENT"
-            "PR-CYBR-CI-CD-AGENT"
-            "PR-CYBR-USER-FEEDBACK-AGENT"
-            "PR-CYBR-DOCUMENTATION-AGENT"
-            "PR-CYBR-INFRASTRUCTURE-AGENT"
-          )
-
-          for REPO in "${REPOS[@]}"; do
-            echo "Pushing $REPO to Docker Hub..."
-            docker push ${{ secrets.DOCKER_USERNAME }}/$REPO:latest
-          done
+          docker build ./config/ -t prcybr/pr-cybr-ci-cd-agent:latest
+      - name: push image to docker hub
+        run: |
+          docker push prcybr/pr-cybr-ci-cd-agent:latest
