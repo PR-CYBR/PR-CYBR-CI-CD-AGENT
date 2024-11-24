@@ -1,0 +1,26 @@
+on:
+  pull_request:
+    types: [ opened ]
+
+jobs:
+  run_n8n_workflow:
+    runs-on: ubuntu-latest
+    name: Run n8n Workflow
+    steps:
+    # 1. Check out the repository
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # 2. Load environment variables
+    - name: Load .env
+      run: |
+        echo "N8N_ENCRYPTION_KEY=${{ secrets.N8N_ENCRYPTION_KEY }}" >> $GITHUB_ENV
+
+    # 3. Run n8n Workflow
+    - name: Run n8n Workflow
+      uses: ./ # Uses an action in the root directory
+      id: n8n
+      with:
+        workflow: "notify-slack" # Update this to the correct workflow ID or name
+      env:
+        N8N_ENCRYPTION_KEY: ${{ env.N8N_ENCRYPTION_KEY }}

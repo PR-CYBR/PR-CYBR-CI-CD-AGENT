@@ -1,0 +1,22 @@
+{
+    "name": "Trigger on Push",
+    "nodes": [
+      {
+        "parameters": {
+          "url": "={{ $env.TRIGGER_URL }}",
+          "method": "POST",
+          "jsonParameters": true,
+          "options": {},
+          "bodyParametersJson": {
+            "repository": "={{$json[\"repository\"]}}",
+            "branch": "={{$json[\"branch\"]}}"
+          }
+        },
+        "name": "HTTP Request",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [250, 300]
+      }
+    ],
+    "connections": {}
+  }

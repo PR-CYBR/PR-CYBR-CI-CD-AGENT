@@ -1,0 +1,16 @@
+{
+    "name": "Notify Discord",
+    "nodes": [
+      {
+        "parameters": {
+          "webhookUrl": "={{ $env.DISCORD_WEBHOOK_URL }}",
+          "content": "A new push has been made to the main branch!"
+        },
+        "name": "Discord",
+        "type": "n8n-nodes-base.discord",
+        "typeVersion": 1,
+        "position": [250, 300]
+      }
+    ],
+    "connections": {}
+  }

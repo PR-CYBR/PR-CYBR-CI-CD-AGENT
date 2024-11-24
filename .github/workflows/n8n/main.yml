@@ -1,0 +1,76 @@
+name: Deploy and Run n8n Workflow
+
+on:
+  push:
+    branches:
+    - main
+
+jobs:
+  deploy-and-run-n8n:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Check out the repository
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Load environment variables
+    - name: Load .env
+      run: |
+        echo "N8N_WORKFLOW_WEBHOOK_URL=${{ secrets.N8N_WORKFLOW_WEBHOOK_URL }}" >> $GITHUB_ENV
+        echo "SLACK_CHANNEL_NAME=${{ secrets.SLACK_CHANNEL_NAME }}" >> $GITHUB_ENV
+        echo "DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}" >> $GITHUB_ENV
+        echo "TRIGGER_URL=${{ secrets.TRIGGER_URL }}" >> $GITHUB_ENV
+
+    # 3. Replace placeholders in workflow-hooks.json
+    - name: Replace placeholders in workflow-hooks.json
+      run: |
+        sed -i 's|${N8N_WORKFLOW_WEBHOOK_URL}|'"${N8N_WORKFLOW_WEBHOOK_URL}"'|g' .github/workflows/n8n/config/workflow-hooks.json
+
+    # 4. Read webhook URL from config file
+    - name: Read Webhook URL
+      id: read_webhook
+      run: |
+        WEBHOOK_URL=$(jq -r '.webhook_url' .github/workflows/n8n/config/workflow-hooks.json)
+        echo "WEBHOOK_URL=$WEBHOOK_URL" >> $GITHUB_ENV
+
+    # 5. Pull and run n8n Docker container
+    - name: Start n8n in Docker
+      run: |
+        docker pull n8nio/n8n
+        docker run -d \
+          --name n8n \
+          -v $GITHUB_WORKSPACE/.github/workflows/n8n/config/auth.json:/home/node/.n8n/auth.json \
+          -v $GITHUB_WORKSPACE/.github/workflows/n8n/workflows:/home/node/.n8n/workflows \
+          -e N8N_USERNAME=${{ secrets.N8N_USERNAME }} \
+          -e N8N_PASSWORD=${{ secrets.N8N_PASSWORD }} \
+          -e WEBHOOK_URL=${{ env.WEBHOOK_URL }} \
+          -p 5678:5678 n8nio/n8n
+
+    # 6. Trigger n8n workflows (via webhook)
+    - name: Trigger n8n workflow
+      run: |
+        curl -X POST ${{ env.WEBHOOK_URL }}/github-action-trigger \
+        -H "Content-Type: application/json" \
+        -d '{
+              "repository": "${{ github.repository }}",
+              "branch": "${{ github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "author": "${{ github.actor }}"
+            }'
+
+    # 7. Create a pull request to trigger another workflow
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v4
+      with:
+        branch: update-n8n
+        commit-message: "Automated workflow triggered by n8n"
+        title: "Automated Workflow Trigger"
+        body: |
+          This pull request was automatically created by an n8n workflow.
+
+    # 8. Stop and remove the container
+    - name: Clean up Docker
+      run: |
+        docker stop n8n
+        docker rm n8n

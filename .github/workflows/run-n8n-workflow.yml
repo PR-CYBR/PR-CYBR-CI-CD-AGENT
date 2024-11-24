@@ -1,0 +1,23 @@
+name: Trigger n8n Workflow
+
+on:
+  push:
+    branches:
+    - main
+
+jobs:
+  trigger-n8n:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Trigger n8n Webhook
+      run: |
+        curl -X POST https://pr-cybr.app.n8n.cloud/webhook/c6e8c433-d57b-4716-8185-847a3ed53ff8 \
+        -H "x-api-key: YOUR_SECRET_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{
+              "repository": "${{ github.repository }}",
+              "branch": "${{ github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "author": "${{ github.actor }}"
+            }'
