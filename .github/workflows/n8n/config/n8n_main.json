@@ -1,0 +1,157 @@
+{
+  "name": "n8n-main",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n    \"discord\": {\n      \"token\": \"${DISCORD_TOKEN}\",\n      \"channel\": \"${DISCORD_CHANNEL_NAME}\"\n    },\n    \"git\": {\n      \"token\": \"${GIT_TOKEN}\"\n    },\n    \"slack\": {\n      \"token\": \"${SLACK_TOKEN}\",\n      \"channel\": \"${SLACK_CHANNEL_NAME}\"\n    }\n  }",
+        "options": {}
+      },
+      "id": "f7aa9858-f030-450a-8fe9-3626f03a51ac",
+      "name": "Load auth.json",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n    \"webhook_url\": \"${N8N_WORKFLOW_WEBHOOK_URL}\"\n  }",
+        "options": {}
+      },
+      "id": "3a4dcf9b-ae58-4936-946c-ebd2d8607fdf",
+      "name": "Load webhooks",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1020,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "workflow",
+        "operation": "enable",
+        "workflowId": {
+          "__rl": true,
+          "mode": "name",
+          "value": ""
+        },
+        "owner": {
+          "__rl": true,
+          "value": "https://github.com/PR-CYBR",
+          "mode": "url"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "PR-CYBR-CI-CD-AGENT",
+          "mode": "list",
+          "cachedResultName": "PR-CYBR-CI-CD-AGENT",
+          "cachedResultUrl": "https://github.com/PR-CYBR/PR-CYBR-CI-CD-AGENT"
+        }
+      },
+      "id": "65dfa89c-8ee5-40ee-ab4b-cb3d22609642",
+      "name": "Start GitHub Workflow",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        240
+      ],
+      "credentials": {
+        "githubOAuth2Api": {
+          "id": "1lUcdYveTA5bJsbz",
+          "name": "GitHub account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "pr-cybr-ci-cd-repo-update",
+        "options": {}
+      },
+      "id": "7a87b2a1-6f2c-4ac1-b2bb-3ba22fb95354",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        600,
+        240
+      ],
+      "webhookId": "b54b90b9-c2a9-4486-9eee-fde1d5546eed"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "name": "First item",
+          "code": 1
+        }
+      },
+      {
+        "json": {
+          "name": "Second item",
+          "code": 2
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Load auth.json": {
+      "main": [
+        [
+          {
+            "node": "Load webhooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load webhooks": {
+      "main": [
+        [
+          {
+            "node": "Start GitHub Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Load auth.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6501bc5d-85fe-4e23-b107-558c74e91ab1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4c1dacce92bce3ef2cfd7c715d64c6d83676438f8e338d314d9fdce2515b0734"
+  },
+  "id": "JphEU6Mr3Is7UMEg",
+  "tags": [
+    {
+      "name": "ci-cd",
+      "id": "8eGOyWwteAs0yKCY",
+      "createdAt": "2024-11-24T01:16:02.233Z",
+      "updatedAt": "2024-11-24T01:16:02.233Z"
+    }
+  ]
+}
