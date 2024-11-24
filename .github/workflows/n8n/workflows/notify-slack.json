@@ -2,17 +2,22 @@
     "name": "Notify Slack",
     "nodes": [
       {
-        "parameters": {},
-        "id": "manual-trigger-id",
-        "name": "Manual Trigger",
-        "type": "n8n-nodes-base.manualTrigger",
-        "typeVersion": 1,
-        "position": [100, 300]
+        "parameters": {
+          "path": "notify-slack",
+          "httpMethod": "POST",
+          "options": {}
+        },
+        "id": "webhook-id",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [100, 300],
+        "webhookId": "unique-webhook-id-slack"
       },
       {
         "parameters": {
           "mode": "raw",
-          "jsonOutput": "{\n    \"slack\": {\n      \"token\": \"${SLACK_TOKEN}\",\n      \"channel\": \"${SLACK_CHANNEL_NAME}\"\n    }\n  }",
+          "jsonOutput": "{\n    \"slack\": {\n      \"token\": \"${SLACK_BOT_TOKEN}\",\n      \"channel\": \"${SLACK_CHANNEL_NAME}\"\n    }\n  }",
           "options": {}
         },
         "id": "load-auth-id",
@@ -24,7 +29,7 @@
       {
         "parameters": {
           "channel": "={{ $json[\"slack\"][\"channel\"] }}",
-          "text": "A new push has been made to the main branch!"
+          "text": "PR-CYBR-CI-CD-AGENT has been updated.\n- Repo: https://github.com/PR-CYBR/PR-CYBR-CI-CD-AGENT\n- Commit-ID: 0e24e2543c507de2eb3812d02859a73affcbd5d7\n- Commit-URL: https://github.com/PR-CYBR/PR-CYBR-CI-CD-AGENT/commit/0e24e2543c507de2eb3812d02859a73affcbd5d7\n- Author: cywf"
         },
         "id": "slack-node-id",
         "name": "Slack",
@@ -34,7 +39,7 @@
       }
     ],
     "connections": {
-      "Manual Trigger": {
+      "Webhook": {
         "main": [
           [
             {

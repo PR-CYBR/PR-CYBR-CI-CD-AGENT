@@ -1,9 +1,9 @@
 {
-    "name": "Notify Discord",
+    "name": "Test n8n Slack Action",
     "nodes": [
       {
         "parameters": {
-          "path": "notify-discord",
+          "path": "test-n8n-slack",
           "httpMethod": "POST",
           "options": {}
         },
@@ -12,27 +12,28 @@
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 2,
         "position": [100, 300],
-        "webhookId": "unique-webhook-id-discord"
+        "webhookId": "unique-webhook-id-slack-test"
       },
       {
         "parameters": {
           "mode": "raw",
-          "jsonOutput": "{\n    \"discord\": {\n      \"webhookUrl\": \"${DISCORD_WEBHOOK_URL}\"\n    }\n  }",
+          "jsonOutput": "{\n    \"slack\": {\n      \"token\": \"${SLACK_TOKEN}\",\n      \"channel\": \"${SLACK_CHANNEL_NAME}\"\n    }\n  }",
           "options": {}
         },
         "id": "load-auth-id",
         "name": "Load auth.json",
+        "type": "n8n-nodes-base.set",
         "typeVersion": 1,
         "position": [300, 300]
       },
       {
         "parameters": {
-          "webhookUrl": "={{ $json[\"discord\"][\"webhookUrl\"] }}",
-          "content": "PR-CYBR-CI-CD-AGENT has been updated.\n- Repo: https://github.com/PR-CYBR/PR-CYBR-CI-CD-AGENT\n- Commit-ID: 0e24e2543c507de2eb3812d02859a73affcbd5d7\n- Commit-URL: https://github.com/PR-CYBR/PR-CYBR-CI-CD-AGENT/commit/0e24e2543c507de2eb3812d02859a73affcbd5d7\n- Author: cywf"
+          "channel": "={{ $json[\"slack\"][\"channel\"] }}",
+          "text": "This is a test message from n8n!"
         },
-        "id": "discord-node-id",
-        "name": "Discord",
-        "type": "n8n-nodes-base.discord",
+        "id": "slack-node-id",
+        "name": "Slack",
+        "type": "n8n-nodes-base.slack",
         "typeVersion": 1,
         "position": [500, 300]
       }
@@ -53,7 +54,7 @@
         "main": [
           [
             {
-              "node": "Discord",
+              "node": "Slack",
               "type": "main",
               "index": 0
             }

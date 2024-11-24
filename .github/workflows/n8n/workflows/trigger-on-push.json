@@ -2,12 +2,17 @@
     "name": "Trigger on Push",
     "nodes": [
       {
-        "parameters": {},
-        "id": "manual-trigger-id",
-        "name": "Manual Trigger",
-        "type": "n8n-nodes-base.manualTrigger",
-        "typeVersion": 1,
-        "position": [100, 300]
+        "parameters": {
+          "path": "trigger-on-push",
+          "httpMethod": "POST",
+          "options": {}
+        },
+        "id": "webhook-id",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [100, 300],
+        "webhookId": "unique-webhook-id-push"
       },
       {
         "parameters": {
@@ -28,8 +33,10 @@
           "jsonParameters": true,
           "options": {},
           "bodyParametersJson": {
-            "repository": "={{$json[\"repository\"]}}",
-            "branch": "={{$json[\"branch\"]}}"
+            "repository": "={{$json[\"body\"][\"repository\"]}}",
+            "branch": "={{$json[\"body\"][\"branch\"]}}",
+            "commit": "={{$json[\"body\"][\"commit\"]}}",
+            "author": "={{$json[\"body\"][\"author\"]}}"
           }
         },
         "id": "http-request-id",
@@ -40,7 +47,7 @@
       }
     ],
     "connections": {
-      "Manual Trigger": {
+      "Webhook": {
         "main": [
           [
             {

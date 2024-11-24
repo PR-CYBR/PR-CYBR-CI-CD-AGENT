@@ -7,20 +7,34 @@ jobs:
     runs-on: ubuntu-latest
     name: Run n8n Workflow
     steps:
-    # 1. Check out the repository
     - name: Checkout
       uses: actions/checkout@v4
 
-    # 2. Load environment variables
     - name: Load .env
       run: |
         echo "N8N_ENCRYPTION_KEY=${{ secrets.N8N_ENCRYPTION_KEY }}" >> $GITHUB_ENV
 
-    # 3. Run n8n Workflow
+    - name: Get PR Commit Details
+      id: pr_commit
+      run: |
+        COMMIT_SHA=$(jq -r '.pull_request.head.sha' $GITHUB_EVENT_PATH)
+        AUTHOR=$(jq -r '.pull_request.user.login' $GITHUB_EVENT_PATH)
+        echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
+        echo "AUTHOR=$AUTHOR" >> $GITHUB_ENV
+
     - name: Run n8n Workflow
-      uses: ./ # Uses an action in the root directory
-      id: n8n
-      with:
-        workflow: "notify-slack" # Update this to the correct workflow ID or name
-      env:
-        N8N_ENCRYPTION_KEY: ${{ env.N8N_ENCRYPTION_KEY }}
+      run: |
+        curl -X POST ${{ secrets.N8N_WORKFLOW_WEBHOOK_URL }}/notify-slack \
+        -H "Content-Type: application/json" \
+        -d '{
+              "repository": "https://github.com/${{ github.repository }}",
+              "commit": "${{ env.COMMIT_SHA }}",
+              "author": "${{ env.AUTHOR }}"
+            }'
+        curl -X POST ${{ secrets.N8N_WORKFLOW_WEBHOOK_URL }}/notify-discord \
+        -H "Content-Type: application/json" \
+        -d '{
+              "repository": "https://github.com/${{ github.repository }}",
+              "commit": "${{ env.COMMIT_SHA }}",
+              "author": "${{ env.AUTHOR }}"
+            }'

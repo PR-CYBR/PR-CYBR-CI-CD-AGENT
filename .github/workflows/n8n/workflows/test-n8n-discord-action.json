@@ -1,9 +1,9 @@
 {
-    "name": "Notify Discord",
+    "name": "Test n8n Discord Action",
     "nodes": [
       {
         "parameters": {
-          "path": "notify-discord",
+          "path": "test-n8n-discord",
           "httpMethod": "POST",
           "options": {}
         },
@@ -12,7 +12,7 @@
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 2,
         "position": [100, 300],
-        "webhookId": "unique-webhook-id-discord"
+        "webhookId": "unique-webhook-id-discord-test"
       },
       {
         "parameters": {
@@ -22,13 +22,14 @@
         },
         "id": "load-auth-id",
         "name": "Load auth.json",
+        "type": "n8n-nodes-base.set",
         "typeVersion": 1,
         "position": [300, 300]
       },
       {
         "parameters": {
           "webhookUrl": "={{ $json[\"discord\"][\"webhookUrl\"] }}",
-          "content": "PR-CYBR-CI-CD-AGENT has been updated.\n- Repo: https://github.com/PR-CYBR/PR-CYBR-CI-CD-AGENT\n- Commit-ID: 0e24e2543c507de2eb3812d02859a73affcbd5d7\n- Commit-URL: https://github.com/PR-CYBR/PR-CYBR-CI-CD-AGENT/commit/0e24e2543c507de2eb3812d02859a73affcbd5d7\n- Author: cywf"
+          "content": "This is a test message from n8n!"
         },
         "id": "discord-node-id",
         "name": "Discord",
