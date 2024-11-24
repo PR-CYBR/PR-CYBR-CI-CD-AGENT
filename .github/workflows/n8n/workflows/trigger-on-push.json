@@ -2,8 +2,28 @@
     "name": "Trigger on Push",
     "nodes": [
       {
+        "parameters": {},
+        "id": "manual-trigger-id",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [100, 300]
+      },
+      {
         "parameters": {
-          "url": "={{ $env.TRIGGER_URL }}",
+          "mode": "raw",
+          "jsonOutput": "{\n    \"trigger\": {\n      \"url\": \"${TRIGGER_URL}\"\n    }\n  }",
+          "options": {}
+        },
+        "id": "load-config-id",
+        "name": "Load Config",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 1,
+        "position": [300, 300]
+      },
+      {
+        "parameters": {
+          "url": "={{ $json[\"trigger\"][\"url\"] }}",
           "method": "POST",
           "jsonParameters": true,
           "options": {},
@@ -12,11 +32,35 @@
             "branch": "={{$json[\"branch\"]}}"
           }
         },
+        "id": "http-request-id",
         "name": "HTTP Request",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 1,
-        "position": [250, 300]
+        "position": [500, 300]
       }
     ],
-    "connections": {}
+    "connections": {
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "Load Config",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Config": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
   }

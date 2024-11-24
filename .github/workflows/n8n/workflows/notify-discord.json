@@ -2,15 +2,59 @@
     "name": "Notify Discord",
     "nodes": [
       {
+        "parameters": {},
+        "id": "manual-trigger-id",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [100, 300]
+      },
+      {
         "parameters": {
-          "webhookUrl": "={{ $env.DISCORD_WEBHOOK_URL }}",
+          "mode": "raw",
+          "jsonOutput": "{\n    \"discord\": {\n      \"webhookUrl\": \"${DISCORD_WEBHOOK_URL}\"\n    }\n  }",
+          "options": {}
+        },
+        "id": "load-auth-id",
+        "name": "Load auth.json",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 1,
+        "position": [300, 300]
+      },
+      {
+        "parameters": {
+          "webhookUrl": "={{ $json[\"discord\"][\"webhookUrl\"] }}",
           "content": "A new push has been made to the main branch!"
         },
+        "id": "discord-node-id",
         "name": "Discord",
         "type": "n8n-nodes-base.discord",
         "typeVersion": 1,
-        "position": [250, 300]
+        "position": [500, 300]
       }
     ],
-    "connections": {}
+    "connections": {
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "Load auth.json",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load auth.json": {
+        "main": [
+          [
+            {
+              "node": "Discord",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
   }
