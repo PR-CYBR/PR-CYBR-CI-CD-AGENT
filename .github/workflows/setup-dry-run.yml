@@ -1,0 +1,27 @@
+name: setup-dry-run
+
+on:
+  workflow_dispatch:   # manual trigger
+  push:
+    branches: [ codex, agents, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04   # run inside clean Ubuntu container
+    steps:
+      - name: Install Git
+        run: |
+          apt-get update -y
+          apt-get install -y git
+
+      - name: Clone repo
+        run: |
+          git clone https://github.com/${{ github.repository }} /workspace
+
+      - name: Verify directory
+        run: |
+          cd /workspace
+          echo "✅ Successfully cloned and accessed repo at /workspace"
