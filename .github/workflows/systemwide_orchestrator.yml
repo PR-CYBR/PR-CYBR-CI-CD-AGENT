@@ -1,0 +1,119 @@
+# System-wide orchestrator for sequential deployments across agents A-01 through A-12.
+# Required secrets/variables:
+#   secrets.TFC_API_TOKEN     -> Terraform Cloud API token (shared with ci_cd_sync workflow).
+#   secrets.TFC_ORG           -> Terraform Cloud organization name.
+#   secrets.ZEROTIER_TOKEN    -> ZeroTier API token for network joins.
+#   secrets.TAILSCALE_AUTHKEY -> Tailscale auth key for DNS configuration.
+#   secrets.SLACK_WEBHOOK_URL -> Optional Slack webhook for deployment notifications.
+#   vars.ZAPIER_HOOK_ID       -> Identifier for Zapier hand-offs.
+#   vars.N8N_WEBHOOK_URL      -> Optional n8n webhook to chain automations.
+#   vars.TFC_WORKSPACE        -> Default Terraform Cloud workspace slug for orchestrations.
+name: Systemwide Deployment Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      trigger_source:
+        description: "Manual trigger source (slack|zapier|n8n|manual)."
+        required: false
+      agent_subset:
+        description: "Optional subset of agents to deploy (defaults to full A-01..A-12)."
+        required: false
+      tfc_workspace_override:
+        description: "Override Terraform Cloud workspace slug."
+        required: false
+      run_network_bootstrap:
+        description: "Override network bootstrap (true|false)."
+        required: false
+      slack_channel:
+        description: "Slack channel for notifications (requires secrets.SLACK_WEBHOOK_URL)."
+        required: false
+  repository_dispatch:
+    types:
+      - systemwide-orchestrate
+      - slack-broadcast
+      - zapier-handshake
+      - n8n-payload
+
+jobs:
+  ingest-signal:
+    name: Collect orchestration parameters
+    runs-on: ubuntu-latest
+    outputs:
+      agent_scope: ${{ steps.payload.outputs.agents }}
+      tfc_workspace: ${{ steps.payload.outputs.workspace }}
+      run_network_bootstrap: ${{ steps.payload.outputs.run_bootstrap }}
+      trigger_source: ${{ steps.payload.outputs.source }}
+      slack_channel: ${{ steps.payload.outputs.slack_channel }}
+    steps:
+      - name: Parse incoming payload
+        id: payload
+        env:
+          DEFAULT_SCOPE: "A-01,A-02,A-03,A-04,A-05,A-06,A-07,A-08,A-09,A-10,A-11,A-12"
+          DEFAULT_WORKSPACE: ${{ vars.TFC_WORKSPACE }}
+        run: |
+          file="$GITHUB_EVENT_PATH"
+          agents=$(jq -r '(.inputs.agent_subset // .client_payload.agent_subset // "")' "$file")
+          if [[ -z "$agents" || "$agents" == "null" ]]; then
+            agents="$DEFAULT_SCOPE"
+          fi
+          workspace=$(jq -r '(.inputs.tfc_workspace_override // .client_payload.tfc_workspace_override // "")' "$file")
+          if [[ -z "$workspace" || "$workspace" == "null" ]]; then
+            workspace="$DEFAULT_WORKSPACE"
+          fi
+          run_bootstrap=$(jq -r '(.inputs.run_network_bootstrap // .client_payload.run_network_bootstrap // "")' "$file")
+          if [[ -z "$run_bootstrap" || "$run_bootstrap" == "null" ]]; then
+            run_bootstrap="true"
+          fi
+          source=$(jq -r '(.inputs.trigger_source // .client_payload.trigger_source // "manual")' "$file")
+          slack_channel=$(jq -r '(.inputs.slack_channel // .client_payload.slack_channel // "")' "$file")
+          printf 'agents=%s\n' "$agents" >> "$GITHUB_OUTPUT"
+          printf 'workspace=%s\n' "$workspace" >> "$GITHUB_OUTPUT"
+          printf 'run_bootstrap=%s\n' "$run_bootstrap" >> "$GITHUB_OUTPUT"
+          printf 'source=%s\n' "$source" >> "$GITHUB_OUTPUT"
+          printf 'slack_channel=%s\n' "$slack_channel" >> "$GITHUB_OUTPUT"
+
+      - name: Announce trigger source
+        env:
+          SOURCE: ${{ steps.payload.outputs.source }}
+          SLACK_CHANNEL: ${{ steps.payload.outputs.slack_channel }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ZAPIER_HOOK_ID: ${{ vars.ZAPIER_HOOK_ID }}
+          N8N_WEBHOOK_URL: ${{ vars.N8N_WEBHOOK_URL }}
+        run: |
+          echo "Deployment orchestrator invoked by ${SOURCE}."
+          if [[ -n "${SLACK_WEBHOOK_URL}" && -n "${SLACK_CHANNEL}" ]]; then
+            payload=$(jq -n --arg channel "${SLACK_CHANNEL}" --arg text "Systemwide rollout initiated from ${SOURCE}." '{channel: $channel, text: $text}')
+            curl -sS -X POST "${SLACK_WEBHOOK_URL}" -H 'Content-Type: application/json' -d "${payload}" || echo "Slack notification placeholder."
+          fi
+          if [[ -n "${ZAPIER_HOOK_ID}" ]]; then
+            echo "Zapier hook ${ZAPIER_HOOK_ID} available for downstream automations."
+          fi
+          if [[ -n "${N8N_WEBHOOK_URL}" ]]; then
+            curl -sS -X POST "${N8N_WEBHOOK_URL}" -H 'Content-Type: application/json' -d '{"event":"systemwide_orchestrator_start"}' || echo "n8n notification placeholder."
+          fi
+
+  systemwide-rollout:
+    name: Execute sequential agent rollouts
+    needs: ingest-signal
+    uses: ./.github/workflows/ci_cd_sync.yml
+    with:
+      agent_scope: ${{ needs.ingest-signal.outputs.agent_scope }}
+      tfc_workspace_override: ${{ needs.ingest-signal.outputs.tfc_workspace }}
+      run_network_bootstrap: ${{ needs.ingest-signal.outputs.run_network_bootstrap }}
+    secrets: inherit
+
+  completion-summary:
+    name: Summarize orchestration
+    needs:
+      - ingest-signal
+      - systemwide-rollout
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit summary
+        env:
+          AGENTS: ${{ needs.ingest-signal.outputs.agent_scope }}
+          SOURCE: ${{ needs.ingest-signal.outputs.trigger_source }}
+        run: |
+          echo "Completed rollout for agents: ${AGENTS}."
+          echo "Trigger source: ${SOURCE}."
