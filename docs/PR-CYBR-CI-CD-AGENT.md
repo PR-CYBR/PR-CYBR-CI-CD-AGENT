@@ -396,3 +396,20 @@ The **PR-CYBR-CI-CD-AGENT** is a cornerstone in the automation and efficiency of
 9. **collaborative_deployment**: Coordinates deployment schedules with other agents to minimize disruptions and validate changes in staging before production rollout.
 10. **documentation_and_reporting**: Generates documentation and reports about the CI/CD processes and performance to keep stakeholders informed.
 ```
+### Operational Automation Scripts
+
+The CI/CD agent ships with hardened shell utilities intended for both manual operators and automated runners. Each script emits HITL-friendly logs through `scripts/lib/logging.sh` and returns explicit exit codes for pipeline gating.
+
+| Script | Primary Responsibilities | Automation Notes |
+| --- | --- | --- |
+| `scripts/setup.sh` | Detects execution context, verifies local dependencies, and validates Terraform/Tailscale/ZeroTier credentials before running connectivity self-tests. | Invoke at the start of any provisioning workflow. Export `TERRAFORM_CLOUD_TOKEN`/`TF_TOKEN`, `TAILSCALE_AUTHKEY`, and `ZEROTIER_CENTRAL_TOKEN` (or `ZEROTIER_TOKEN`) before calling. CI systems (GitHub Actions, Zapier, n8n) should set `CI=true` or `AUTOMATION_CONTEXT` so the script records an automated run. |
+| `scripts/maintenance.sh` | Performs health checks, rotates maintenance logs, and triggers synchronization hooks for Zapier, n8n, and GitHub Actions contexts while enforcing HITL gates. | Schedule this script via cron or workflow runners. To require human-in-the-loop approval, set `HITL_REQUIRED=true` and export `HITL_APPROVED=true` when approval is granted. Optional integrations may define `ZAPIER_WEBHOOK_URL`, `N8N_WEBHOOK_URL`, and `GITHUB_STEP_SUMMARY` for richer telemetry. |
+
+Both scripts can be executed manually for diagnostics:
+
+```bash
+./scripts/setup.sh
+HITL_APPROVED=true ./scripts/maintenance.sh
+```
+
+Automations should treat non-zero exits as blockers and surface the console output to reviewers for transparent triage.
