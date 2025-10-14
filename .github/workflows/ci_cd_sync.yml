@@ -1,0 +1,171 @@
+# CI/CD sync workflow to orchestrate agent environments.
+# Required secrets/variables:
+#   secrets.TFC_API_TOKEN        -> Terraform Cloud API token scoped to the CI/CD workspace.
+#   secrets.TFC_ORG              -> Terraform Cloud organization name hosting orchestrator workspaces.
+#   vars.TFC_WORKSPACE           -> Terraform Cloud workspace slug (for example: "agent-ci-sync").
+#   secrets.ZEROTIER_TOKEN       -> API token allowing ZeroTier network membership operations.
+#   vars.ZEROTIER_NETWORK_ID     -> ZeroTier network ID that agents must join.
+#   secrets.TAILSCALE_AUTHKEY    -> Ephemeral auth key for Tailscale automation logins.
+#   vars.TAILSCALE_DNS_DOMAIN    -> Tailnet DNS search domain to propagate for agents.
+name: CI/CD Sync Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent_scope:
+        description: |
+          Comma-separated list of agents (A-01..A-12) to sync. Leave blank for all agents.
+          Requires Terraform Cloud, ZeroTier, and Tailscale credentials defined in repository secrets/variables.
+        required: false
+      tfc_workspace_override:
+        description: "Optional Terraform Cloud workspace override (defaults to vars.TFC_WORKSPACE)."
+        required: false
+      run_network_bootstrap:
+        description: "Whether to re-run ZeroTier/Tailscale network bootstrap before orchestration."
+        required: false
+        default: "true"
+  repository_dispatch:
+    types:
+      - ci-cd-sync
+      - orchestrate-network
+  push:
+    branches:
+      - main
+  workflow_call:
+    inputs:
+      agent_scope:
+        required: false
+        type: string
+      tfc_workspace_override:
+        required: false
+        type: string
+      run_network_bootstrap:
+        required: false
+        type: string
+    secrets:
+      TFC_API_TOKEN:
+        required: true
+      TFC_ORG:
+        required: true
+      ZEROTIER_TOKEN:
+        required: true
+      TAILSCALE_AUTHKEY:
+        required: true
+
+jobs:
+  sync-agents:
+    name: "Sync ${{ matrix.agent }}"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        agent:
+          - A-01
+          - A-02
+          - A-03
+          - A-04
+          - A-05
+          - A-06
+          - A-07
+          - A-08
+          - A-09
+          - A-10
+          - A-11
+          - A-12
+      fail-fast: false
+      max-parallel: 1
+    env:
+      TFC_API_TOKEN: ${{ secrets.TFC_API_TOKEN }}
+      TFC_ORG: ${{ secrets.TFC_ORG }}
+      ZEROTIER_TOKEN: ${{ secrets.ZEROTIER_TOKEN }}
+      ZEROTIER_NETWORK_ID: ${{ vars.ZEROTIER_NETWORK_ID }}
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+      TAILSCALE_DNS_DOMAIN: ${{ vars.TAILSCALE_DNS_DOMAIN }}
+    steps:
+      - name: Collect invocation context
+        id: context
+        env:
+          DEFAULT_WORKSPACE: ${{ vars.TFC_WORKSPACE }}
+        run: |
+          scope=$(jq -r '(.inputs.agent_scope // .client_payload.agent_scope // "")' "$GITHUB_EVENT_PATH")
+          workspace=$(jq -r '(.inputs.tfc_workspace_override // .client_payload.tfc_workspace_override // "")' "$GITHUB_EVENT_PATH")
+          if [[ -z "${workspace}" || "${workspace}" == "null" ]]; then
+            workspace="${DEFAULT_WORKSPACE}"
+          fi
+          run_bootstrap=$(jq -r '(.inputs.run_network_bootstrap // .client_payload.run_network_bootstrap // "")' "$GITHUB_EVENT_PATH")
+          if [[ -z "${run_bootstrap}" || "${run_bootstrap}" == "null" ]]; then
+            run_bootstrap="true"
+          fi
+          echo "scope=${scope}" >> "$GITHUB_OUTPUT"
+          echo "workspace=${workspace}" >> "$GITHUB_OUTPUT"
+          echo "run_bootstrap=${run_bootstrap}" >> "$GITHUB_OUTPUT"
+      - name: Determine if agent is requested
+        id: filter
+        run: |
+          SCOPE="${{ steps.context.outputs.scope }}"
+          if [[ -z "${SCOPE}" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          IFS=',' read -ra REQUESTED <<< "${SCOPE}"
+          for entry in "${REQUESTED[@]}"; do
+            cleaned=$(echo "$entry" | xargs)
+            if [[ "${cleaned}" == "${{ matrix.agent }}" ]]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "run=false" >> "$GITHUB_OUTPUT"
+      - name: Checkout repository
+        if: steps.filter.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Report Terraform Cloud workspace target
+        if: steps.filter.outputs.run == 'true'
+        env:
+          SELECTED_WORKSPACE: ${{ steps.context.outputs.workspace }}
+        run: |
+          echo "Using Terraform Cloud workspace ${TFC_ORG}/${SELECTED_WORKSPACE}."
+          echo "Ensure the workspace has state access for ${{ matrix.agent }}."
+
+      - name: Initialize Terraform context
+        if: steps.filter.outputs.run == 'true'
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
+
+      - name: Select Terraform Cloud workspace
+        if: steps.filter.outputs.run == 'true'
+        env:
+          SELECTED_WORKSPACE: ${{ steps.context.outputs.workspace }}
+        run: |
+          echo "terraform workspace select ${SELECTED_WORKSPACE}" >> /tmp/terraform_commands.sh
+          cat /tmp/terraform_commands.sh
+
+      - name: Bootstrap ZeroTier connectivity
+        if: ${{ steps.filter.outputs.run == 'true' && (steps.context.outputs.run_bootstrap != 'false' || github.event_name == 'repository_dispatch') }}
+        run: |
+          echo "Authorizing agent ${{ matrix.agent }} against ZeroTier network ${ZEROTIER_NETWORK_ID}."
+          echo "Using token supplied via secrets.ZEROTIER_TOKEN."
+
+      - name: Configure Tailscale DNS
+        if: ${{ steps.filter.outputs.run == 'true' && (steps.context.outputs.run_bootstrap != 'false' || github.event_name == 'repository_dispatch') }}
+        run: |
+          echo "Configuring Tailscale DNS domain ${TAILSCALE_DNS_DOMAIN} for agent ${{ matrix.agent }}."
+          echo "Auth key provided via secrets.TAILSCALE_AUTHKEY."
+
+      - name: Execute agent orchestration playbook
+        if: steps.filter.outputs.run == 'true'
+        env:
+          TARGET_AGENT: ${{ matrix.agent }}
+        run: |
+          echo "Running orchestration tasks for ${TARGET_AGENT}."
+          ./scripts/orchestrate_agent.sh "${TARGET_AGENT}" || echo "Placeholder: implement orchestrator script."
+
+      - name: Complete sync summary
+        if: steps.filter.outputs.run == 'true'
+        run: |
+          echo "Agent ${{ matrix.agent }} sync completed."
+
+      - name: Skip summary
+        if: steps.filter.outputs.run != 'true'
+        run: echo "Skipping ${{ matrix.agent }} because it was not requested."

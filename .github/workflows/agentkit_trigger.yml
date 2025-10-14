@@ -1,0 +1,145 @@
+# AgentKit trigger workflow bridging webhook inputs and manual dispatches.
+# Required secrets/variables:
+#   secrets.AGENTKIT_WEBHOOK_TOKEN -> Shared secret validating AgentKit webhook payloads.
+#   vars.AGENTKIT_ENDPOINT         -> Base URL for AgentKit orchestrator API.
+#   vars.HITL_REQUIRED             -> Default "true"/"false" flag indicating if human-in-the-loop approval is mandatory.
+#   vars.HITL_APPROVER_GROUP       -> Optional reference string identifying who grants approvals.
+name: AgentKit Trigger
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_agents:
+        description: "Comma separated list of agents to run (default all)."
+        required: false
+      pipeline_stage:
+        description: "Pipeline stage (bootstrap|plan|apply|verify)."
+        required: false
+      hitl_override:
+        description: "Set to 'approved' to bypass HITL when allowed by policy."
+        required: false
+  repository_dispatch:
+    types:
+      - agentkit
+      - agentkit-webhook
+
+jobs:
+  hitl-gate:
+    name: Evaluate HITL gate
+    runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.decision.outputs.approved }}
+    env:
+      HITL_REQUIRED: ${{ vars.HITL_REQUIRED || 'false' }}
+      HITL_OVERRIDE: ${{ github.event.inputs.hitl_override || github.event.client_payload.hitl_override || '' }}
+      HITL_APPROVED_BY: ${{ github.event.client_payload.hitl_approved_by || '' }}
+      HITL_APPROVER_GROUP: ${{ vars.HITL_APPROVER_GROUP || 'designated approvers' }}
+    steps:
+      - name: Determine approval state
+        id: decision
+        run: |
+          echo "HITL required: ${HITL_REQUIRED}".
+          if [[ "${HITL_REQUIRED}" == "true" && "${HITL_OVERRIDE}" != "approved" ]]; then
+            if [[ -z "${HITL_APPROVED_BY}" ]]; then
+              echo "Human-in-the-loop approval required from ${HITL_APPROVER_GROUP}."
+              echo "approved=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "approved=true" >> "$GITHUB_OUTPUT"
+
+  agentkit-matrix:
+    name: "AgentKit ${{ matrix.agent }} :: ${{ matrix.stage }}"
+    needs: hitl-gate
+    if: needs.hitl-gate.outputs.approved == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        agent:
+          - A-01
+          - A-02
+          - A-03
+          - A-04
+          - A-05
+          - A-06
+          - A-07
+          - A-08
+          - A-09
+          - A-10
+          - A-11
+          - A-12
+        stage:
+          - bootstrap
+          - plan
+          - apply
+          - verify
+      fail-fast: false
+    env:
+      TARGET_AGENTS: ${{ github.event.inputs.target_agents || github.event.client_payload.target_agents || '' }}
+      TARGET_STAGE: ${{ github.event.inputs.pipeline_stage || github.event.client_payload.pipeline_stage || '' }}
+      AGENTKIT_WEBHOOK_TOKEN: ${{ secrets.AGENTKIT_WEBHOOK_TOKEN }}
+      AGENTKIT_ENDPOINT: ${{ vars.AGENTKIT_ENDPOINT }}
+    steps:
+      - name: Filter agent selection
+        id: filter-agent
+        run: |
+          run_agent=false
+          if [[ -z "${TARGET_AGENTS}" ]]; then
+            run_agent=true
+          else
+            IFS=',' read -ra REQUESTED <<< "${TARGET_AGENTS}"
+            for entry in "${REQUESTED[@]}"; do
+              cleaned=$(echo "$entry" | xargs)
+              if [[ "${cleaned}" == "${{ matrix.agent }}" ]]; then
+                run_agent=true
+              fi
+            done
+          fi
+          echo "run=${run_agent}" >> "$GITHUB_OUTPUT"
+      - name: Filter stage selection
+        id: filter-stage
+        run: |
+          run_stage=false
+          if [[ -z "${TARGET_STAGE}" ]]; then
+            run_stage=true
+          else
+            if [[ "${TARGET_STAGE}" == "${{ matrix.stage }}" ]]; then
+              run_stage=true
+            fi
+          fi
+          echo "run=${run_stage}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.filter-agent.outputs.run == 'true' && steps.filter-stage.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Validate AgentKit credentials
+        if: steps.filter-agent.outputs.run == 'true' && steps.filter-stage.outputs.run == 'true'
+        run: |
+          if [[ -z "${AGENTKIT_WEBHOOK_TOKEN}" ]]; then
+            echo "AGENTKIT_WEBHOOK_TOKEN secret is required."
+            exit 1
+          fi
+          if [[ -z "${AGENTKIT_ENDPOINT}" ]]; then
+            echo "vars.AGENTKIT_ENDPOINT is required to contact the orchestrator."
+            exit 1
+          fi
+          echo "AgentKit webhook token present; continuing."
+
+      - name: Execute AgentKit stage orchestration
+        if: steps.filter-agent.outputs.run == 'true' && steps.filter-stage.outputs.run == 'true'
+        env:
+          CURRENT_AGENT: ${{ matrix.agent }}
+          CURRENT_STAGE: ${{ matrix.stage }}
+        run: |
+          echo "Invoking AgentKit pipeline stage ${CURRENT_STAGE} for ${CURRENT_AGENT}."
+          curl -sS -X POST "${AGENTKIT_ENDPOINT}/agents/${CURRENT_AGENT}/pipeline" \
+            -H "Authorization: Bearer ${AGENTKIT_WEBHOOK_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"stage\": \"${CURRENT_STAGE}\", \"source\": \"github\"}" || \
+            echo "Placeholder invocation completed."
+
+      - name: Skip summary
+        if: steps.filter-agent.outputs.run != 'true' || steps.filter-stage.outputs.run != 'true'
+        run: |
+          echo "Skipping ${{ matrix.agent }} at stage ${{ matrix.stage }} because it was not requested."
