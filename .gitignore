@@ -25,6 +25,9 @@ var/
 *.log
 *.tmp
 
+# Structured logging directories are tracked, but runtime files are filtered by logs/.gitignore
+!logs/
+
 # VSCode settings
 .vscode/
 

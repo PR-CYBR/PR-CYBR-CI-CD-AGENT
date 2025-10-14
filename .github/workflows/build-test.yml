@@ -8,36 +8,75 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      LOG_DIR: logs/ci
+      LOG_FILE: logs/ci/build-test-${{ github.run_id }}.jsonl
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Initialize structured CI log
+        run: |
+          mkdir -p "${LOG_DIR}"
+          printf '{"timestamp":"%s","level":"info","event":"workflow_started","workflow":"build-test"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${LOG_FILE}"
+
       - name: Set up Docker Compose
         run: |
+          set -euo pipefail
+          printf '{"timestamp":"%s","level":"info","event":"docker_setup","status":"started"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
           sudo apt-get update
           sudo apt-get install -y docker-compose
+          printf '{"timestamp":"%s","level":"info","event":"docker_setup","status":"completed"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
 
       - name: Pull and start containers
-        run: docker-compose up -d
+        run: |
+          set -euo pipefail
+          printf '{"timestamp":"%s","level":"info","event":"compose_up","status":"started"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
+          docker-compose up -d
+          printf '{"timestamp":"%s","level":"info","event":"compose_up","status":"completed"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
 
       - name: Execute commands in container
         env:
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          CONTAINER_ID=$(docker ps -qf "name=${REPO_NAME}") # Use the repo name as the container name
-          docker exec $CONTAINER_ID git clone https://github.com/${{ github.repository }} /app # Clone into /app
-          docker exec $CONTAINER_ID python /app/setup.py install # Run setup.py from the root
-          docker exec $CONTAINER_ID python -m unittest discover /app/tests # Run tests
+          set -euo pipefail
+          CONTAINER_ID=$(docker ps -qf "name=${REPO_NAME}")
+          if [ -z "${CONTAINER_ID}" ]; then
+              printf '{"timestamp":"%s","level":"error","event":"container_lookup","status":"not_found"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
+              exit 1
+          fi
+          echo "CONTAINER_ID=${CONTAINER_ID}" >> "${GITHUB_ENV}"
+          SANITIZED_ID=${CONTAINER_ID:0:12}
+          printf '{"timestamp":"%s","level":"info","event":"container_lookup","status":"found","container_suffix":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${SANITIZED_ID}" >> "${LOG_FILE}"
+
+          docker exec "${CONTAINER_ID}" git clone https://github.com/${{ github.repository }} /app
+          printf '{"timestamp":"%s","level":"info","event":"repo_clone","status":"completed"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
+
+          docker exec "${CONTAINER_ID}" python /app/setup.py install
+          printf '{"timestamp":"%s","level":"info","event":"setup_install","status":"completed"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
+
+          set +e
+          docker exec "${CONTAINER_ID}" python -m unittest discover /app/tests
+          TEST_EXIT=$?
+          set -e
+          echo "TEST_EXIT=${TEST_EXIT}" >> "${GITHUB_ENV}"
+          if [ "${TEST_EXIT}" -eq 0 ]; then
+              printf '{"timestamp":"%s","level":"info","event":"tests","status":"passed"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
+          else
+              printf '{"timestamp":"%s","level":"error","event":"tests","status":"failed"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
+          fi
 
       - name: Check test results
         env:
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          if docker exec $CONTAINER_ID python -m unittest discover /app/tests; then
+          if [ "${TEST_EXIT}" -eq 0 ]; then
+            printf '{"timestamp":"%s","level":"info","event":"workflow_completed","status":"passed"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
             echo "Tests passed. Deploying..."
             # Add deployment steps here
           else
+            printf '{"timestamp":"%s","level":"error","event":"workflow_completed","status":"failed"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${LOG_FILE}"
             echo "Tests failed. Creating an issue..."
             curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -d '{"title": "Test Failure on Main", "body": "Tests failed on the main branch. Please investigate."}' \

@@ -1,0 +1,2 @@
+{"timestamp":"2024-01-01T00:00:00Z","level":"info","action":"script_started","script":"build-containers"}
+{"timestamp":"2024-01-01T00:02:00Z","level":"info","action":"docker_build","target":"pr-cybr-backend-agent","status":"success"}
