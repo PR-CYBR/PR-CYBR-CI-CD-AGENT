@@ -1,0 +1,70 @@
+name: "PR Secret Detection"
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+
+jobs:
+  secrets-scan:
+    if: ${{ github.head_ref == 'codex' }}
+    name: Detect leaked secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Shared repository setup
+        uses: ./.github/actions/shared-security-setup
+        with:
+          python-version: ''
+      - name: Install gitleaks
+        id: install
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION="8.18.4"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          tar -xf gitleaks.tar.gz gitleaks
+          install -m 0755 gitleaks /usr/local/bin/gitleaks
+      - name: Run gitleaks secret scan
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p security-reports/status
+          EXIT_CODE=0
+          if gitleaks detect \
+            --no-banner \
+            --redact \
+            --report-format json \
+            --report-path security-reports/gitleaks-report.json \
+            --exit-code 1 \
+            --source . | tee security-reports/gitleaks.log; then
+            EXIT_CODE=0
+          else
+            EXIT_CODE=${PIPESTATUS[0]:-1}
+          fi
+          echo "$EXIT_CODE" > security-reports/status/gitleaks.exit_code
+      - name: Upload secret scan artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-secret-scan-${{ github.run_number }}
+          path: security-reports/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Evaluate secret scan results
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_file="security-reports/status/gitleaks.exit_code"
+          if [ -f "$status_file" ]; then
+            exit_code=$(cat "$status_file")
+            if [ "$exit_code" -ne 0 ]; then
+              echo "::error::Gitleaks detected potential secrets (exit code ${exit_code})."
+              exit 1
+            fi
+          fi
