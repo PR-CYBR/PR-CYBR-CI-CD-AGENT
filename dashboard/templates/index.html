@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="title">Workflow Overview</h1>
+<p class="subtitle">Trigger executions and monitor status in real-time.</p>
+
+<div class="columns">
+  <div class="column is-half">
+    <h2 class="title is-4">Trigger Execution</h2>
+    <div class="box">
+      <div class="field">
+        <label class="label" for="builder-select">Builder</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select id="builder-select">
+              {% for builder in builders %}
+              <option value="{{ builder.id }}">{{ builder.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label" for="backend-select">Backend</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select id="backend-select">
+              <option value="codex">Codex</option>
+              <option value="agentkit">AgentKit</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label" for="payload">Payload (JSON)</label>
+        <div class="control">
+          <textarea class="textarea" id="payload" rows="4" placeholder='{"input": "Hello"}'></textarea>
+        </div>
+      </div>
+      <div class="field">
+        <div class="control">
+          <button class="button is-primary" id="execute-btn">Trigger Execution</button>
+        </div>
+      </div>
+      <div class="notification is-hidden" id="execute-notification"></div>
+    </div>
+  </div>
+  <div class="column is-half">
+    <h2 class="title is-4">Recent Executions</h2>
+    <table class="table is-fullwidth is-striped">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Builder</th>
+          <th>Status</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody id="executions-table">
+        {% for execution in executions %}
+        <tr>
+          <td><a href="{{ url_for('status_page', execution_id=execution.id) }}">{{ execution.id[:8] }}…</a></td>
+          <td>{{ execution.builder_id }}</td>
+          <td>{{ execution.status }}</td>
+          <td>{{ execution.updated_at | round(2) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h2 class="title is-4">Activity Feed</h2>
+<div id="activity-feed"></div>
+{% endblock %}

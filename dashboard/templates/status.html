@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="title">Execution Status</h1>
+{% if builder %}
+<p class="subtitle">Builder: {{ builder.name }}</p>
+{% endif %}
+<div class="box" data-execution-id="{{ execution.id }}">
+  <p><strong>Execution ID:</strong> {{ execution.id }}</p>
+  <p><strong>Status:</strong> <span id="status-label">{{ execution.status }}</span></p>
+  <p><strong>Created:</strong> {{ execution.created_at }}</p>
+  <p><strong>Updated:</strong> <span id="status-updated">{{ execution.updated_at }}</span></p>
+  <h2 class="title is-5">Logs</h2>
+  <pre id="status-logs">{% for log in execution.logs %}{{ log }}
+{% endfor %}</pre>
+</div>
+{% endblock %}
