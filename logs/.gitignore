@@ -1,0 +1,12 @@
+# Ignore runtime logs by default
+*
+
+# Allow directory structure
+!*/
+
+# Allow documentation and sanitized examples
+!.gitignore
+!README.md
+!**/.gitignore
+!**/README.md
+!**/sanitized-*.jsonl

@@ -1,0 +1,2 @@
+{"timestamp":"2024-01-01T00:00:00Z","level":"info","event":"workflow_started","workflow":"build-test"}
+{"timestamp":"2024-01-01T00:05:00Z","level":"info","event":"tests","status":"passed"}

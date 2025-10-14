@@ -2,7 +2,7 @@
 
 # ------------------------------ #
 # Key Objectives for this script #
-# 
+#
 # 1. Update system
 # 2. Check if Git is Installed (and install if not), if installed check for agent repo's (if they exist, end script with a success message, if they do not exist, proceed with next steps)
 # 3. Prompt user for their Github Username / Email (what will be used for git commit's, pushes, etc.)
@@ -28,28 +28,68 @@
 # 10. Print to user that they now can apply changes and make git commits to the `<branch-name-user-picked>` branch
 # 11. Ask user if they would like to setup a cron job to sync / pull their branch with the main branch (for one, or all agents)
 
-LOG_FILE="git-sync.log"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LOG_ROOT="${LOG_ROOT:-"${REPO_ROOT}/logs/automation"}"
+mkdir -p "${LOG_ROOT}"
+TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+LOG_FILE="${LOG_FILE:-"${LOG_ROOT}/git-sync-${TIMESTAMP}.jsonl"}"
 
-# Function to log messages
-log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a $LOG_FILE
+escape_json() {
+    printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
+log_event() {
+    local level="$1"
+    local action="$2"
+    local status="${3:-}"
+    local message="${4:-}"
+    local console_message="${5:-${4:-}}"
+    local extra=""
+
+    if [[ -n "${status}" ]]; then
+        extra+=$(printf ',"status":"%s"' "$(escape_json "${status}")")
+    fi
+
+    if [[ -n "${message}" ]]; then
+        extra+=$(printf ',"message":"%s"' "$(escape_json "${message}")")
+    fi
+
+    printf '{"timestamp":"%s","level":"%s","action":"%s"%s}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        "$(escape_json "${level}")" \
+        "$(escape_json "${action}")" \
+        "${extra}" >> "${LOG_FILE}"
+
+    if [[ -n "${console_message}" ]]; then
+        echo "[${level^^}] ${console_message}"
+    else
+        echo "[${level^^}] ${action} ${status}"
+    fi
+}
+
+log_event "info" "script_started" "running" "Preparing PR-CYBR git sync helper"
+
 # Update system
-log "Updating system..."
-sudo apt-get update && sudo apt-get upgrade -y
+log_event "info" "system_update" "started" "Starting package refresh." "Updating system packages..."
+if sudo apt-get update && sudo apt-get upgrade -y; then
+    log_event "info" "system_update" "succeeded" "Package refresh completed." "System packages updated."
+else
+    log_event "error" "system_update" "failed" "Package manager exited with an error."
+    exit 1
+fi
 
 # Check if Git is installed
 if ! command -v git &> /dev/null; then
-    log "Git is not installed. Installing Git..."
-    sudo apt-get install -y git
-    if [ $? -ne 0 ]; then
-        log "Failed to install Git."
+    log_event "info" "git_check" "installing" "Git not detected; attempting installation." "Git is not installed. Installing Git..."
+    if sudo apt-get install -y git; then
+        log_event "info" "git_check" "succeeded" "Git installation completed." "Git installed successfully."
+    else
+        log_event "error" "git_check" "failed" "Package manager could not install Git."
         exit 1
     fi
-    log "Git installed successfully."
 else
-    log "Git is already installed."
+    log_event "info" "git_check" "present" "Git already available." "Git is already installed."
 fi
 
 # Check for existing agent repositories
@@ -58,13 +98,13 @@ EXISTING_REPOS=0
 
 for repo in "${AGENT_REPOS[@]}"; do
     if [ -d "$repo" ]; then
-        log "Repository $repo already exists."
+        log_event "info" "repository_check" "exists" "Repository ${repo} already exists." "Repository $repo already exists."
         EXISTING_REPOS=$((EXISTING_REPOS + 1))
     fi
 done
 
 if [ $EXISTING_REPOS -eq ${#AGENT_REPOS[@]} ]; then
-    log "All agent repositories already exist. Exiting script."
+    log_event "info" "repository_check" "complete" "All tracked repositories already exist."
     exit 0
 fi
 
@@ -75,7 +115,7 @@ read -p "Enter your GitHub email: " GITHUB_EMAIL
 # Configure Git
 git config --global user.name "$GITHUB_USERNAME"
 git config --global user.email "$GITHUB_EMAIL"
-log "Git configured with username: $GITHUB_USERNAME and email: $GITHUB_EMAIL"
+log_event "info" "git_config" "succeeded" "Git user configuration applied." "Git configuration updated."
 
 # Ask user if they want to set up a new SSH key
 read -p "Would you like to set up a new SSH key and add it to GitHub? (y/n): " setup_ssh
@@ -83,20 +123,22 @@ if [ "$setup_ssh" == "y" ]; then
     ssh-keygen -t rsa -b 4096 -C "$GITHUB_EMAIL" -f ~/.ssh/id_rsa -N ""
     eval "$(ssh-agent -s)"
     ssh-add ~/.ssh/id_rsa
-    log "SSH key generated."
+    log_event "info" "ssh_key" "generated" "New SSH key pair generated." "SSH key generated."
 
     # Display the SSH key and prompt user to add it to GitHub
-    log "Copy the following SSH key to your GitHub account:"
+    echo "Copy the following SSH key to your GitHub account:"
     cat ~/.ssh/id_rsa.pub
     read -p "Press enter after adding the SSH key to GitHub..."
 
     # Test SSH connection
     ssh -T git@github.com
     if [ $? -ne 1 ]; then
-        log "SSH connection to GitHub failed."
+        log_event "error" "ssh_test" "failed" "SSH authentication with GitHub failed."
         exit 1
     fi
-    log "SSH connection to GitHub successful."
+    log_event "info" "ssh_test" "succeeded" "SSH authentication confirmed." "SSH connection to GitHub successful."
+else
+    log_event "info" "ssh_key" "skipped" "User opted to skip SSH key generation."
 fi
 
 # Prompt user to choose which agent to clone
@@ -146,22 +188,22 @@ read -p "Enter the new branch name: " branch_name
 
 # Create new branch
 git checkout -b "$branch_name"
-log "New branch '$branch_name' created."
+log_event "info" "branch_create" "succeeded" "Branch created." "New branch '$branch_name' created."
 
 # Sync with main branch
 git fetch origin
 git merge origin/main
-log "Branch '$branch_name' synced with 'main'."
+log_event "info" "branch_sync" "succeeded" "Branch synced with main." "Branch '$branch_name' synced with 'main'."
 
 # Inform user
-log "You can now apply changes and make git commits to the '$branch_name' branch."
+log_event "info" "next_steps" "ready" "Branch ready for development." "You can now apply changes and make git commits to the '$branch_name' branch."
 
 # Ask user if they want to set up a cron job for syncing
 read -p "Would you like to set up a cron job to sync your branch with the main branch? (y/n): " setup_cron
 if [ "$setup_cron" == "y" ]; then
     CRON_CMD="cd $(pwd) && git fetch origin && git merge origin/main"
     (crontab -l 2>/dev/null; echo "0 * * * * $CRON_CMD") | crontab -
-    log "Cron job set up to sync branch '$branch_name' with 'main' every hour."
+    log_event "info" "cron_setup" "succeeded" "Hourly sync cron job created." "Cron job set up to sync branch '$branch_name' with 'main' every hour."
 fi
 
-log "Git sync script completed successfully."
+log_event "info" "script_completed" "success" "Git sync workflow completed."
