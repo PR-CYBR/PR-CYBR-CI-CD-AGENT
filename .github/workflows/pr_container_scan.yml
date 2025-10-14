@@ -1,0 +1,89 @@
+name: "PR Container Security"
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+
+jobs:
+  container-security:
+    if: ${{ github.head_ref == 'codex' }}
+    name: Build, SBOM, and container scan
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: pr-${{ github.repository_owner }}-${{ github.sha }}
+    steps:
+      - name: Shared repository setup
+        uses: ./.github/actions/shared-security-setup
+        with:
+          python-version: ''
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build application container image
+        run: |
+          docker build --file build/Dockerfile --tag "$IMAGE_TAG" .
+      - name: Install syft for SBOM generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+      - name: Install trivy for container scanning
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      - name: Generate container SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p security-reports/status
+          docker save "$IMAGE_TAG" -o app-image.tar
+          syft app-image.tar -o spdx-json=security-reports/app.sbom.json
+      - name: Scan container image with Trivy
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p security-reports/status
+          EXIT_CODE=0
+          trivy image \
+            --exit-code 1 \
+            --format json \
+            --output security-reports/trivy-report.json \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            "$IMAGE_TAG" || EXIT_CODE=$?
+          EXIT_CODE=${EXIT_CODE:-0}
+          echo "$EXIT_CODE" > security-reports/status/trivy.exit_code
+          trivy image \
+            --exit-code 0 \
+            --format table \
+            --severity HIGH,CRITICAL \
+            "$IMAGE_TAG" > security-reports/trivy-report.txt || true
+      - name: Evaluate container scan results
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_file="security-reports/status/trivy.exit_code"
+          if [ -f "$status_file" ]; then
+            exit_code=$(cat "$status_file")
+            if [ "$exit_code" -ne 0 ]; then
+              echo "::error::Container scan reported high severity issues (exit code ${exit_code})."
+              exit 1
+            fi
+          fi
+      - name: Upload container security artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-container-security-${{ github.run_number }}
+          path: |
+            security-reports/
+            app-image.tar
+          if-no-files-found: error
+          retention-days: 30
