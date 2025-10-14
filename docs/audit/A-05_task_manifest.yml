@@ -1,0 +1,162 @@
+workflows:
+  - name: Build and Test
+    file: .github/workflows/build-test.yml
+    description: CI job that provisions Docker Compose, executes setup.py, and runs unit tests with conditional issue creation on failure.
+    triggers:
+      push:
+        branches:
+          - main
+    dependencies:
+      - docker-compose binary available in runner
+      - repository Docker configuration alignment
+      - GitHub token for issue automation
+    outputs:
+      - unittest results in workflow logs
+      - optional GitHub issue on failure
+
+  - name: Docker Hub Sync
+    file: .github/workflows/docker-hub-sync.yml
+    description: Hourly and push-triggered job that rebuilds containers and dispatches the Docker Hub publishing workflow.
+    triggers:
+      push:
+        branches:
+          - main
+      schedule:
+        - cron: "0 * * * *"
+    dependencies:
+      - scripts/build-containers.sh
+      - secrets.DOCKER_USERNAME
+      - secrets.DOCKER_PASSWORD
+    outputs:
+      - Refreshed local container images
+      - Workflow dispatch event for docker-hub-update.yml
+
+  - name: Docker Hub Update
+    file: .github/workflows/docker-hub-update.yml
+    description: Builds and publishes Docker images from build/Dockerfile to Docker Hub with commit-based tags.
+    triggers:
+      push:
+        branches:
+          - main
+        paths:
+          - build/Dockerfile
+      workflow_dispatch: {}
+    dependencies:
+      - secrets.PR_CYBR_DOCKER_USER
+      - secrets.PR_CYBR_DOCKER_PASS
+      - build/Dockerfile content
+    outputs:
+      - prcybr/pr-cybr-ci-cd-agent images tagged with commit SHA and latest
+
+  - name: Trigger n8n Workflow
+    file: .github/workflows/run-n8n-workflow.yml
+    description: Sends repository metadata to the hosted n8n instance via webhook after each push.
+    triggers:
+      push:
+        branches:
+          - main
+    dependencies:
+      - External webhook URL (https://pr-cybr.app.n8n.cloud/...)
+      - Secret API key injected into curl command
+    outputs:
+      - JSON payload posted to external n8n workflow
+
+  - name: Deploy and Run n8n Workflow
+    file: .github/workflows/n8n/main.yml
+    description: Spins up an ephemeral n8n container inside the workflow, injects secrets, triggers a workflow webhook, then tears down the container.
+    triggers:
+      push:
+        branches:
+          - main
+    dependencies:
+      - secrets.N8N_WORKFLOW_WEBHOOK_URL
+      - secrets.N8N_USERNAME
+      - secrets.N8N_PASSWORD
+      - secrets.SLACK_CHANNEL_NAME
+      - secrets.DISCORD_WEBHOOK_URL
+      - secrets.TRIGGER_URL
+    outputs:
+      - n8n workflow execution against trigger-on-push endpoint
+      - Docker container lifecycle logs
+
+dashboard_components:
+  - name: Chat Interface
+    source: docs/agent-dashboard.md
+    description: Real-time agent communication panel embedded in the PR-CYBR dashboard.
+    triggers:
+      - User session initialization
+      - Agent selection changes
+    dependencies:
+      - OpenAI API integration
+      - Responsive UI layout assets
+
+  - name: Interactive Map
+    source: docs/agent-dashboard.md
+    description: Leaflet.js and MapBox powered geospatial visualization reflecting PR-CYBR operations.
+    triggers:
+      - Map data refresh events
+      - User searches and filter interactions
+    dependencies:
+      - MapBox API key
+      - GeoJSON data feeds
+
+  - name: Agent Sidebar
+    source: docs/agent-dashboard.md
+    description: Listing of available agents with real-time status indicators and shortcuts.
+    triggers:
+      - Agent status polling
+      - User customization actions
+    dependencies:
+      - Agent registry data
+      - Dashboard configuration storage
+
+automation_endpoints:
+  - name: Local Setup
+    file: scripts/local_setup.sh
+    type: shell-script
+    description: Multi-phase provisioning script that validates prerequisites, installs tooling, clones agent repositories, and establishes Docker networking.
+    trigger_conditions:
+      - Manual execution during environment bootstrapping
+    dependencies:
+      - sudo privileges for package installation
+      - Internet connectivity for repository cloning
+
+  - name: Provision Agent
+    file: scripts/provision_agent.sh
+    type: shell-script
+    description: Applies environment-specific configuration to prepare the CI/CD agent for local or cloud deployment.
+    trigger_conditions:
+      - Post-setup configuration runs
+    dependencies:
+      - Configuration templates in config/
+      - Access to required secrets
+
+  - name: Deploy Agent
+    file: scripts/deploy_agent.sh
+    type: shell-script
+    description: Handles deployment steps for releasing the agent into target environments.
+    trigger_conditions:
+      - Manual or automated deployment windows
+    dependencies:
+      - Packaged artifacts produced by CI/CD workflows
+      - Target environment credentials
+
+  - name: Build Containers
+    file: scripts/build-containers.sh
+    type: shell-script
+    description: Invoked by Docker Hub Sync workflow to assemble container images.
+    trigger_conditions:
+      - Workflow execution via docker-hub-sync.yml
+    dependencies:
+      - Docker engine in runner context
+      - build/Dockerfile definitions
+
+  - name: n8n Webhook Sync
+    file: scripts/n8n-sync.sh
+    type: shell-script
+    description: Facilitates synchronization between local assets and the n8n automation platform.
+    trigger_conditions:
+      - Manual sync cycles or scheduled automation
+    dependencies:
+      - n8n API credentials
+      - Access to .github/workflows/n8n assets
