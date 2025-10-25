@@ -1,0 +1,216 @@
+name: Notion Sync
+
+on:
+  issues: {}
+  pull_request: {}
+  discussion: {}
+  project_card: {}
+  workflow_run:
+    workflows:
+      - tfc-sync
+      - Deploy and Run n8n Workflow
+      - Build and Publish image to Docker Hub
+      - Docker Hub Sync
+      - setup-dry-run
+      - Trigger n8n Workflow
+      - maintenance
+    types:
+      - completed
+
+jobs:
+  sync_notion:
+    name: Sync Notion workspace
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      discussions: read
+      issues: read
+      projects: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Initialise context
+        run: |
+          cat <<'EOF' >> "$GITHUB_ENV"
+          EVENT_NAME=${{ github.event_name }}
+          EVENT_ACTION=${{ github.event.action || '' }}
+          RESOURCE_TYPE=${{ github.event_name }}
+          RESOURCE_ID=
+          RESOURCE_URL=
+          RESOURCE_TITLE=
+          METADATA_JSON={}
+          REPOSITORY=${{ github.repository }}
+          WORKFLOW_NAME=${{ github.workflow }}
+          RUN_ID=${{ github.run_id }}
+          ACTOR=${{ github.actor }}
+          EOF
+
+      - name: Capture issue context
+        if: ${{ github.event_name == 'issues' }}
+        run: |
+          python <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as fh:
+              event = json.load(fh)
+
+          issue = event['issue']
+          metadata = {
+              'state': issue.get('state'),
+              'labels': [label.get('name') for label in issue.get('labels', [])],
+              'assignees': [assignee.get('login') for assignee in issue.get('assignees', [])],
+          }
+
+          env_path = Path(os.environ['GITHUB_ENV'])
+          with env_path.open('a', encoding='utf-8') as env:
+              env.write('RESOURCE_TYPE=issue\n')
+              env.write(f"RESOURCE_ID={issue['number']}\n")
+              env.write(f"RESOURCE_URL={issue['html_url']}\n")
+              env.write(f"RESOURCE_TITLE={issue.get('title','')}\n")
+              env.write(f"METADATA_JSON={json.dumps(metadata, separators=(',',':'))}\n")
+          PY
+
+      - name: Capture pull request context
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          python <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as fh:
+              event = json.load(fh)
+
+          pr = event['pull_request']
+          metadata = {
+              'state': pr.get('state'),
+              'mergeable': pr.get('mergeable'),
+              'base': pr.get('base', {}).get('ref'),
+              'head': pr.get('head', {}).get('ref'),
+          }
+
+          env_path = Path(os.environ['GITHUB_ENV'])
+          with env_path.open('a', encoding='utf-8') as env:
+              env.write('RESOURCE_TYPE=pull_request\n')
+              env.write(f"RESOURCE_ID={pr['number']}\n")
+              env.write(f"RESOURCE_URL={pr['html_url']}\n")
+              env.write(f"RESOURCE_TITLE={pr.get('title','')}\n")
+              env.write(f"METADATA_JSON={json.dumps(metadata, separators=(',',':'))}\n")
+          PY
+
+      - name: Capture discussion context
+        if: ${{ github.event_name == 'discussion' }}
+        run: |
+          python <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as fh:
+              event = json.load(fh)
+
+          discussion = event['discussion']
+          metadata = {
+              'category': discussion.get('category', {}).get('name'),
+              'state': discussion.get('state'),
+          }
+
+          env_path = Path(os.environ['GITHUB_ENV'])
+          with env_path.open('a', encoding='utf-8') as env:
+              env.write('RESOURCE_TYPE=discussion\n')
+              env.write(f"RESOURCE_ID={discussion['number']}\n")
+              env.write(f"RESOURCE_URL={discussion.get('html_url','')}\n")
+              env.write(f"RESOURCE_TITLE={discussion.get('title','')}\n")
+              env.write(f"METADATA_JSON={json.dumps(metadata, separators=(',',':'))}\n")
+          PY
+
+      - name: Capture project card context
+        if: ${{ github.event_name == 'project_card' }}
+        run: |
+          python <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as fh:
+              event = json.load(fh)
+
+          card = event['project_card']
+          metadata = {
+              'column_url': card.get('column_url'),
+              'note': card.get('note'),
+          }
+
+          resource_url = card.get('content_url') or card.get('project_url') or card.get('url')
+
+          env_path = Path(os.environ['GITHUB_ENV'])
+          with env_path.open('a', encoding='utf-8') as env:
+              env.write('RESOURCE_TYPE=project_card\n')
+              env.write(f"RESOURCE_ID={card['id']}\n")
+              env.write(f"RESOURCE_URL={resource_url or ''}\n")
+              env.write('RESOURCE_TITLE=\n')
+              env.write(f"METADATA_JSON={json.dumps(metadata, separators=(',',':'))}\n")
+          PY
+
+      - name: Capture workflow run context
+        if: ${{ github.event_name == 'workflow_run' }}
+        run: |
+          python <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as fh:
+              event = json.load(fh)
+
+          run = event['workflow_run']
+          metadata = {
+              'conclusion': run.get('conclusion'),
+              'event': run.get('event'),
+              'workflow_id': run.get('workflow_id'),
+          }
+
+          env_path = Path(os.environ['GITHUB_ENV'])
+          with env_path.open('a', encoding='utf-8') as env:
+              env.write('RESOURCE_TYPE=workflow_run\n')
+              env.write(f"RESOURCE_ID={run['id']}\n")
+              env.write(f"RESOURCE_URL={run.get('html_url','')}\n")
+              env.write(f"RESOURCE_TITLE={run.get('name','')}\n")
+              env.write(f"METADATA_JSON={json.dumps(metadata, separators=(',',':'))}\n")
+          PY
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Notion sync
+        env:
+          NOTION_API_TOKEN: ${{ secrets.NOTION_API_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/notion_sync.py \
+            --event-name "$EVENT_NAME" \
+            --event-action "$EVENT_ACTION" \
+            --resource-type "$RESOURCE_TYPE" \
+            --resource-id "$RESOURCE_ID" \
+            --resource-url "$RESOURCE_URL" \
+            --title "$RESOURCE_TITLE" \
+            --repository "$REPOSITORY" \
+            --workflow "$WORKFLOW_NAME" \
+            --run-id "$RUN_ID" \
+            --actor "$ACTOR" \
+            --metadata "$METADATA_JSON" \
+            --notion-api-key "$NOTION_API_TOKEN" \
+            --database-id "$NOTION_DATABASE_ID"
