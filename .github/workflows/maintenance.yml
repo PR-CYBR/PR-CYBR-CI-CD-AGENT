@@ -24,6 +24,12 @@ jobs:
           git clone https://github.com/${{ github.repository }} /workspace
 
       - name: Run maintenance.py if present
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_TASK_DB: ${{ secrets.NOTION_TASK_DB }}
+          NOTION_PR_DB: ${{ secrets.NOTION_PR_DB }}
+          NOTION_PROJECT_DB: ${{ secrets.NOTION_PROJECT_DB }}
+          NOTION_DISCUSSION_DB: ${{ secrets.NOTION_DISCUSSION_DB }}
         run: |
           cd /workspace
           if [ -f maintenance.py ]; then

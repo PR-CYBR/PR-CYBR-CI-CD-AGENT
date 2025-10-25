@@ -78,3 +78,34 @@ variable "AGENT_COLLAB" {
   sensitive   = true
   description = "Token for governance, discussions, issues, project boards"
 }
+
+# --- Notion Sync ---
+variable "NOTION_TOKEN" {
+  type        = string
+  sensitive   = true
+  description = "Internal integration token for Notion API"
+}
+
+variable "NOTION_TASK_DB" {
+  type        = string
+  sensitive   = true
+  description = "Database ID for the shared Notion task tracker"
+}
+
+variable "NOTION_PR_DB" {
+  type        = string
+  sensitive   = true
+  description = "Database ID for the pull request alignment database"
+}
+
+variable "NOTION_PROJECT_DB" {
+  type        = string
+  sensitive   = true
+  description = "Database ID for the cross-project portfolio view"
+}
+
+variable "NOTION_DISCUSSION_DB" {
+  type        = string
+  sensitive   = true
+  description = "Database ID for decision logs and discussions"
+}
