@@ -9,6 +9,16 @@ jobs:
     steps:
       - name: Check required environment variables
         env:
+          # Pass secrets and variables from GitHub to the environment
+          AGENT_ACTIONS: ${{ vars.AGENT_ACTIONS }}
+          NOTION_DISCUSSIONS_ARC_DB_ID: ${{ vars.NOTION_DISCUSSIONS_ARC_DB_ID }}
+          NOTION_ISSUES_BACKLOG_DB_ID: ${{ vars.NOTION_ISSUES_BACKLOG_DB_ID }}
+          NOTION_KNOWLEDGE_FILE_DB_ID: ${{ vars.NOTION_KNOWLEDGE_FILE_DB_ID }}
+          NOTION_PAGE_ID: ${{ vars.NOTION_PAGE_ID }}
+          NOTION_PR_BACKLOG_DB_ID: ${{ vars.NOTION_PR_BACKLOG_DB_ID }}
+          NOTION_PROJECT_BOARD_BACKLOG_DB_ID: ${{ vars.NOTION_PROJECT_BOARD_BACKLOG_DB_ID }}
+          NOTION_TASK_BACKLOG_DB_ID: ${{ vars.NOTION_TASK_BACKLOG_DB_ID }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           REQUIRED_VARS: |
             AGENT_ACTIONS
             NOTION_DISCUSSIONS_ARC_DB_ID
@@ -24,12 +34,14 @@ jobs:
           IFS=$'\n' read -d '' -r -a vars <<< "$REQUIRED_VARS"
           for var in "${vars[@]}"; do
             if [ -z "${!var}" ]; then
-              echo "::error::Required variable $var is not set"
+              echo "::error::Required variable $var is not set in GitHub secrets/variables"
               missing="yes"
             else
-              echo "$var is set"
+              echo "✓ $var is set"
             fi
           done
           if [ -n "$missing" ]; then
+            echo "::error::Please configure the missing variables in GitHub repository settings (Settings > Secrets and variables > Actions)"
             exit 1
           fi
+          echo "All required environment variables are properly configured!"
