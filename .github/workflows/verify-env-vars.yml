@@ -1,0 +1,35 @@
+name: Verify Environment Variables
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required environment variables
+        env:
+          REQUIRED_VARS: |
+            AGENT_ACTIONS
+            NOTION_DISCUSSIONS_ARC_DB_ID
+            NOTION_ISSUES_BACKLOG_DB_ID
+            NOTION_KNOWLEDGE_FILE_DB_ID
+            NOTION_PAGE_ID
+            NOTION_PR_BACKLOG_DB_ID
+            NOTION_PROJECT_BOARD_BACKLOG_DB_ID
+            NOTION_TASK_BACKLOG_DB_ID
+            NOTION_TOKEN
+        run: |
+          missing=""
+          IFS=$'\n' read -d '' -r -a vars <<< "$REQUIRED_VARS"
+          for var in "${vars[@]}"; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Required variable $var is not set"
+              missing="yes"
+            else
+              echo "$var is set"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            exit 1
+          fi
