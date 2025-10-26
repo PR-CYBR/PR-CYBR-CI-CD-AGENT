@@ -1,4 +1,4 @@
-name: tfc-sync
+name: terraform-cloud-workflow-bridge
 
 on:
   push:
@@ -11,32 +11,96 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # Prepares for Terraform Cloud OIDC auth
+  id-token: write   # Required for GitHub OIDC token exchange with Terraform Cloud
 
 jobs:
-  terraform:
+  trigger-terraform-cloud-run:
     runs-on: ubuntu-latest
 
+    env:
+      TFC_WORKFLOW_BRIDGE_URL: ${{ vars.TFC_WORKFLOW_BRIDGE_URL }}
+      TFC_WORKFLOW_AUDIENCE: ${{ vars.TFC_WORKFLOW_AUDIENCE }}
+      TFC_WORKSPACE_NAME: ${{ vars.TFC_WORKSPACE_NAME }}
+
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - name: Validate Terraform Cloud workflow bridge configuration
+        run: |
+          set -euo pipefail
+          if [ -z "${TFC_WORKFLOW_BRIDGE_URL}" ]; then
+            echo "::error::Repository variable TFC_WORKFLOW_BRIDGE_URL is not configured."
+            echo "::error::Set it to the Terraform Cloud workflow bridge invocation URL."
+            exit 1
+          fi
+          if [ -z "${TFC_WORKSPACE_NAME}" ]; then
+            echo "::warning::Repository variable TFC_WORKSPACE_NAME is not configured."
+            echo "::warning::Continuing without an explicit workspace hint."
+          fi
+
+      - name: Generate GitHub OIDC token for Terraform Cloud
+        id: oidc-token
+        uses: actions/github-script@v7
+        env:
+          AUDIENCE: ${{ env.TFC_WORKFLOW_AUDIENCE }}
         with:
-          token: ${{ secrets.AGENT_ACTIONS }}   # PAT stored in TFC
+          script: |
+            const audience = process.env.AUDIENCE && process.env.AUDIENCE.trim() !== ''
+              ? process.env.AUDIENCE
+              : 'app.terraform.io';
+            core.info(`Requesting GitHub OIDC token for audience: ${audience}`);
+            const token = await core.getIDToken(audience);
+            if (!token) {
+              core.setFailed('Failed to obtain GitHub OIDC token');
+              return;
+            }
+            core.setSecret(token);
+            core.setOutput('token', token);
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          cli_config_credentials_token: ${{ secrets.TFC_TOKEN }}
+      - name: Trigger Terraform Cloud workflow bridge run
+        env:
+          BRIDGE_URL: ${{ env.TFC_WORKFLOW_BRIDGE_URL }}
+          WORKSPACE_NAME: ${{ env.TFC_WORKSPACE_NAME }}
+          TOKEN: ${{ steps.oidc-token.outputs.token }}
+        run: |
+          set -euo pipefail
 
-      # Initialize Terraform
-      - name: Terraform Init
-        run: terraform init
+          if [ -z "${TOKEN}" ]; then
+            echo "::error::Missing GitHub OIDC token output."
+            exit 1
+          fi
 
-      # Run plan for validation (always runs)
-      - name: Terraform Plan
-        run: terraform plan -input=false -no-color
+          payload=$(jq -n \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg ref "${GITHUB_REF}" \
+            --arg sha "${GITHUB_SHA}" \
+            --arg event "${GITHUB_EVENT_NAME}" \
+            --arg actor "${GITHUB_ACTOR}" \
+            --arg workflow "${GITHUB_WORKFLOW}" \
+            --arg run_id "${GITHUB_RUN_ID}" \
+            --arg run_attempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg workspace "${WORKSPACE_NAME}" \
+            '{
+              repository: $repository,
+              ref: $ref,
+              sha: $sha,
+              event: $event,
+              actor: $actor,
+              workflow: $workflow,
+              run_id: $run_id,
+              run_attempt: $run_attempt,
+              workspace: ($workspace // null)
+            }')
 
-      # Only apply if PR merged into main
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -input=false
+          echo "Dispatching Terraform Cloud workflow bridge run..."
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data "${payload}" \
+            "${BRIDGE_URL}"
+
+      - name: Confirm dispatch acknowledgement
+        if: success()
+        run: |
+          echo "Terraform Cloud workflow bridge acknowledged the request."
+          echo "Monitor the corresponding run directly in Terraform Cloud for plan/apply progress."
