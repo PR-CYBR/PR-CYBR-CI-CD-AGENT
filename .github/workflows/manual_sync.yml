@@ -1,0 +1,24 @@
+name: manual_sync
+on:
+  workflow_dispatch:
+    inputs:
+      database:
+        description: 'Select the Notion database to sync'
+        required: true
+        type: choice
+        default: 'AGENT-TASK-BACKLOG'
+        options:
+          - AGENT-KNOWLEDGE-FILE-ARC
+          - AGENT-TASK-BACKLOG
+          - AGENT-PR-BACKLOG
+          - AGENT-ISSUES-BACKLOG
+          - AGENT-PROJECT-BOARD-BACKLOG
+          - AGENT-DISCUSSIONS-ARC
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Manual Sync placeholder
+        run: echo "Manual sync for ${{ github.event.inputs.database }} not yet implemented."
