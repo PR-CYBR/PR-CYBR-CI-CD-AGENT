@@ -17,6 +17,28 @@ variable "DOCKERHUB_USERNAME" {
   description = "Docker Hub username"
 }
 
+variable "DOCKER_USERNAME" {
+  type        = string
+  description = "Username for Docker Hub sync workflows"
+}
+
+variable "DOCKER_PASSWORD" {
+  type        = string
+  sensitive   = true
+  description = "Password or access token for Docker Hub sync workflows"
+}
+
+variable "PR_CYBR_DOCKER_USER" {
+  type        = string
+  description = "Service account user for PR-CYBR Docker image publishing"
+}
+
+variable "PR_CYBR_DOCKER_PASS" {
+  type        = string
+  sensitive   = true
+  description = "Credential for PR-CYBR Docker image publishing"
+}
+
 # --- Global Infrastructure URIs ---
 variable "GLOBAL_DOMAIN" {
   type        = string
@@ -77,4 +99,58 @@ variable "AGENT_COLLAB" {
   type        = string
   sensitive   = true
   description = "Token for governance, discussions, issues, project boards"
+}
+
+# --- GitHub / Terraform Cloud ---
+variable "GITHUB_TOKEN" {
+  type        = string
+  sensitive   = true
+  description = "Personal access token used by the tfc-sync workflow"
+}
+
+variable "TFC_TOKEN" {
+  type        = string
+  sensitive   = true
+  description = "Terraform Cloud API token for CLI authentication"
+}
+
+# --- n8n Workflow Automation ---
+variable "N8N_ENCRYPTION_KEY" {
+  type        = string
+  sensitive   = true
+  description = "Encryption key used by n8n instances"
+}
+
+variable "N8N_WORKFLOW_WEBHOOK_URL" {
+  type        = string
+  sensitive   = true
+  description = "Webhook endpoint for triggering n8n workflows"
+}
+
+variable "SLACK_CHANNEL_NAME" {
+  type        = string
+  description = "Slack channel identifier for workflow notifications"
+}
+
+variable "DISCORD_WEBHOOK_URL" {
+  type        = string
+  sensitive   = true
+  description = "Discord webhook for workflow notifications"
+}
+
+variable "TRIGGER_URL" {
+  type        = string
+  sensitive   = true
+  description = "Trigger URL for external workflow invocations"
+}
+
+variable "N8N_USERNAME" {
+  type        = string
+  description = "Username for authenticating to n8n"
+}
+
+variable "N8N_PASSWORD" {
+  type        = string
+  sensitive   = true
+  description = "Password for authenticating to n8n"
 }
