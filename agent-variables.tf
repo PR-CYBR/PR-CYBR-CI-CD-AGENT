@@ -33,11 +33,6 @@ variable "GLOBAL_GRAFANA_URI" {
   description = "Grafana endpoint"
 }
 
-variable "GLOBAL_KIBANA_URI" {
-  type        = string
-  description = "Kibana endpoint"
-}
-
 variable "GLOBAL_PROMETHEUS_URI" {
   type        = string
   description = "Prometheus endpoint"
@@ -55,26 +50,8 @@ variable "GLOBAL_TRAEFIK_ACME_EMAIL" {
   description = "Email used by Traefik for Let's Encrypt"
 }
 
-variable "GLOBAL_TRAEFIK_ENTRYPOINTS" {
-  type        = string
-  description = "Default entrypoints for Traefik"
-}
-
 variable "GLOBAL_ZEROTIER_NETWORK_ID" {
   type        = string
   sensitive   = true
   description = "ZeroTier overlay network ID"
-}
-
-# --- Agent Tokens ---
-variable "AGENT_ACTIONS" {
-  type        = string
-  sensitive   = true
-  description = "Token for CI/CD pipelines (builds, tests, deploys)"
-}
-
-variable "AGENT_COLLAB" {
-  type        = string
-  sensitive   = true
-  description = "Token for governance, discussions, issues, project boards"
 }
