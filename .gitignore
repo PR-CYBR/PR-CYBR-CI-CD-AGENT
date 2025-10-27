@@ -36,3 +36,8 @@ var/
 
 # Secret files
 config/secrets.yml
+
+# Terraform local state
+.terraform/
+*.tfstate
+*.tfstate.*
